@@ -38,6 +38,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.tianji.common.constants.ErrorInfo.Msg.OPERATE_FAILED;
@@ -280,8 +281,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (order == null) {
             return;
         }
+        /**
+         * bug原因：对于 Long 类型的自动装箱，范围在 -128 到 127 之间的整数会被缓存，因此当创建 Long 对象时，
+         * 如果它的值在这个范围内，会直接从缓存中获取，而不是创建新的对象。而对于超出这个范围的整数，则会创建新的对象
+         */
         // 3.判断订单所属用户与当前登录用户是否一致
-        if(userId != order.getUserId()){
+        // if(userId != order.getUserId()){
+        if (!Objects.equals(userId,order.getUserId())){
             // 不一致，说明不是当前用户的订单，结束
             throw new BadRequestException("不能删除他人订单");
         }
