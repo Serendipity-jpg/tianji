@@ -1,5 +1,6 @@
 package com.tianji.trade.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.api.cache.RoleCache;
@@ -118,7 +119,7 @@ public class RefundApplyServiceImpl extends ServiceImpl<RefundApplyMapper, Refun
             throw new BizIllegalException(TradeErrorInfo.REFUND_TOO_MANY_TIMES);
         }
         // 5.判断最近一次退款的状态，如果退款在进行中，直接返回
-        if (CollUtils.isNotEmpty(refundApplies) && RefundStatus.inProgress(refundApplies.get(0).getStatus())) {
+        if (CollUtil.isNotEmpty(refundApplies) && RefundStatus.inProgress(refundApplies.get(0).getStatus())) {
             throw new BizIllegalException(TradeErrorInfo.REFUND_IN_PROGRESS);
         }
 
@@ -355,7 +356,7 @@ public class RefundApplyServiceImpl extends ServiceImpl<RefundApplyMapper, Refun
                 .eq(detailId != null, RefundApply::getOrderDetailId, detailId)
                 .list();
         // 2.判断是否为空
-        if (CollUtils.isEmpty(list)) {
+        if (CollUtil.isEmpty(list)) {
             return;
         }
         // 3.获取最新一次退款记录，判断状态
@@ -446,7 +447,7 @@ public class RefundApplyServiceImpl extends ServiceImpl<RefundApplyMapper, Refun
         if (status == RefundResultDTO.SUCCESS) {
             // 4.1.查询子订单信息
             OrderDetail detail = detailService.getById(refundApply.getOrderDetailId());
-            // 4.2.发送MQ消息，通知报名成功
+            // 4.2.发送MQ消息，取消报名成功
             rabbitMqHelper.send(
                     MqConstants.Exchange.ORDER_EXCHANGE,
                     MqConstants.Key.ORDER_REFUND_KEY,
@@ -503,6 +504,9 @@ public class RefundApplyServiceImpl extends ServiceImpl<RefundApplyMapper, Refun
         return result.getStatus() != RefundResultDTO.RUNNING;
     }
 
+    /**
+     * 异步发送退款申请
+     */
     private void sendRefundRequestAsync(RefundApply refundApply) {
         sendRefundRequestExecutor.execute(() -> this.sendRefundRequest(refundApply));
     }
