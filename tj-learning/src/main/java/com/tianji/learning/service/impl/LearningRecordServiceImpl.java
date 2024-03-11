@@ -17,6 +17,7 @@ import com.tianji.learning.enums.SectionType;
 import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.service.ILearningLessonService;
 import com.tianji.learning.service.ILearningRecordService;
+import com.tianji.learning.util.LearningRecordDelayTaskHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,8 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
     private final ILearningLessonService learningLessonService;
 
     private final CourseClient courseClient;
+
+    private final LearningRecordDelayTaskHandler taskHandler;
 
     /**
      * 查询当前用户指定课程的学习进度
@@ -130,41 +133,43 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
             // 提交视频播放记录
             finished = handleVideoRecord(userId, dto);
         }
+        // 如果本小节不是首次学完，由于使用了异步延迟任务，不需要往下执行
+        if (!finished) {
+            return;
+        }
         // 处理课表数据
-        handleLessonData(dto, finished);
+        handleLessonData(dto);
     }
 
     /**
      * 是否已完成该小节
      * 处理课表数据
-     * @param finished
      */
-    private void handleLessonData(LearningRecordFormDTO dto, boolean finished) {
+    private void handleLessonData(LearningRecordFormDTO dto) {
         // 根据lessonId查询课表记录
         LearningLesson learningLesson = learningLessonService.getById(dto.getLessonId());
         if (learningLesson == null) {
             throw new BizIllegalException("未查询到课表记录");
         }
-        boolean allFinished = false;
-        Integer allSections = 0;
+        // boolean allFinished = false;
+        // Integer allSections = 0;
         // 由finished字段可知是否是否为第一次完成小节
-        if (finished) {
-            // feign远程调用课程服务，查询课程信息的小节综述
-            CourseFullInfoDTO courseInfo = courseClient.getCourseInfoById(learningLesson.getCourseId(), false, false);
-            if (courseInfo == null) {
-                throw new BizIllegalException("未查询到课程记录");
-            }
-            allSections = courseInfo.getSectionNum();   // 该课程所有小节数
-            // 判断该课程所有小节是否以学完
-            allFinished = learningLesson.getLearnedSections() + 1 >= allSections;
+        // 使用异步延迟延误后不需要判断了
+        // feign远程调用课程服务，查询课程信息的小节综述
+        CourseFullInfoDTO courseInfo = courseClient.getCourseInfoById(learningLesson.getCourseId(), false, false);
+        if (courseInfo == null) {
+            throw new BizIllegalException("未查询到课程记录");
         }
+        Integer allSections = courseInfo.getSectionNum();   // 该课程所有小节数
+        // 判断该课程所有小节是否已学完
+        boolean allFinished = learningLesson.getLearnedSections() + 1 >= allSections;
         // 更新课表信息：课表状态，已学小节数，最近学习小节id，最近学习时间
         learningLessonService.lambdaUpdate()
-                // 如果当前小节未学完，更新最近学习小节idhe最近学习时间
-                .set(!finished, LearningLesson::getLatestSectionId, learningLesson.getLatestSectionId() + 1)
-                .set(!finished, LearningLesson::getLatestLearnTime, dto.getCommitTime())
+                // 如果当前小节未学完，更新最近学习小节id和最近学习时间
+                .set(LearningLesson::getLatestSectionId, learningLesson.getLatestSectionId() + 1)
+                .set(LearningLesson::getLatestLearnTime, dto.getCommitTime())
                 // 如果当前小姐已学完，更新已学小节数
-                .set(finished,LearningLesson::getLearnedSections,learningLesson.getLearnedSections())
+                .set(LearningLesson::getLearnedSections, learningLesson.getLearnedSections())
                 // 如果该课表所以小节已学完，则更新课表状态为已学完
                 .set(allFinished, LearningLesson::getStatus, LessonStatus.FINISHED)
                 // 首次学习需要将状态由未开始更新为学习中
@@ -184,8 +189,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
      */
     private boolean handleVideoRecord(Long userId, LearningRecordFormDTO dto) {
         // 查询该小节视频进度记录是否已存在，根据lessonId和sectionId进行匹配
-        LearningRecord oldRecord = this.lambdaQuery().eq(LearningRecord::getLessonId, dto.getLessonId())
-                .eq(LearningRecord::getSectionId, dto.getSectionId()).one();
+        LearningRecord oldRecord = queryOldRecord(dto.getLessonId(), dto.getSectionId());
         // 根据查询结果来判断是新增还是删除
         if (oldRecord == null) {
             // po转dto
@@ -204,17 +208,54 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         // 判断本小节是否是首次完成：之前未完成且视频播放进度大于50%
         boolean isFinished = !oldRecord.getFinished() && dto.getMoment() * 2 >= dto.getDuration();
         // 更新视频播放进度，根据主键id进行匹配
+        if (!isFinished) {
+            LearningRecord record = LearningRecord.builder()
+                    .id(oldRecord.getId())
+                    .lessonId(dto.getLessonId())
+                    .sectionId(dto.getSectionId())
+                    .finished(oldRecord.getFinished())
+                    .moment(dto.getMoment())
+                    .build();
+            // 添加指定学习记录到redis，并提交延迟任务到延迟队列DelayQueue
+            taskHandler.addLearningRecordTask(record);
+            // 返回，本小节未完成
+            return false;
+        }
         boolean result = this.lambdaUpdate()
                 .set(LearningRecord::getMoment, dto.getMoment())
                 // 只有首次完成视频播放才更新finished字段和finish_time字段
-                .set(isFinished, LearningRecord::getFinished, true)
-                .set(isFinished, LearningRecord::getFinishTime, dto.getCommitTime())
+                .set(LearningRecord::getFinished, true)
+                .set(LearningRecord::getFinishTime, dto.getCommitTime())
                 .eq(LearningRecord::getId, oldRecord.getId())
                 .update();
         if (!result) {
             throw new DbException("更新视频播放记录失败");
         }
-        return isFinished;
+        // 清理redis相应record
+        taskHandler.cleanRecordCache(dto.getLessonId(), dto.getSectionId());
+        return true;
+    }
+
+    /**
+     * 查询指定学习记录是否已存在，
+     */
+    private LearningRecord queryOldRecord(Long lessonId, Long sectionId) {
+        // 查询redis缓存
+        LearningRecord cacheRecord = taskHandler.readRecordCache(lessonId, sectionId);
+        // redis缓存命中
+        if (cacheRecord != null) {
+            return cacheRecord;
+        }
+        // redis缓存未命中,查询数据库
+        LearningRecord dbRecord = this.lambdaQuery().eq(LearningRecord::getLessonId, lessonId)
+                .eq(LearningRecord::getSectionId, sectionId).one();
+        // 数据库查询结果为null，表示记录不存在，需要新增学习记录，返回null即可
+        if (dbRecord == null) {
+            return null;
+        }
+        // 数据库查询结果写入redis缓存
+        taskHandler.writeRecordCache(dbRecord);
+        return dbRecord;
     }
 
     /**

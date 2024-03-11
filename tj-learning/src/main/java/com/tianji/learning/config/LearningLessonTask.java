@@ -5,8 +5,8 @@ import com.tianji.learning.enums.LessonStatus;
 import com.tianji.learning.service.ILearningLessonService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * @author: hong.jian
  * @date 2024-03-11 11:52
  */
-@Configuration
+@Component
 @RequiredArgsConstructor
 @Slf4j
 public class LearningLessonTask {
@@ -24,7 +24,9 @@ public class LearningLessonTask {
     /**
      * 定期检查`learning_lesson`表中的课程是否过期，
      * 如果过期则将课程状态修改为已过期
-     * 程序启动时间为每天早上5点
+     * 启动时间为每天早上5点
+     * cron表达式： 域 秒 分 时 日 月 周 （年）
+     *  *：通配符  ?:放弃（用于日和周冲突） /:步长，如0|5 每5x执行
      */
     @Scheduled(cron = "0 0 5 * * ?")
     public void updateFinishedLessons() {

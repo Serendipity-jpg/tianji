@@ -11,9 +11,7 @@ import com.tianji.learning.enums.LessonStatus;
 import com.tianji.learning.enums.PlanStatus;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.*;
 import lombok.experimental.Accessors;
 
 /**
@@ -29,6 +27,8 @@ import lombok.experimental.Accessors;
 @TableName("learning_lesson")
 @ApiModel(value="LearningLesson对象", description="学生课程表")
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class LearningLesson implements Serializable {
 
     private static final long serialVersionUID = 1L;

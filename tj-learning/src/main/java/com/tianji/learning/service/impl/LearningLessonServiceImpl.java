@@ -269,6 +269,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         // 根据lessonId进行匹配，修改对应记录的week_freq和plan_status字段
         this.lambdaUpdate().set(LearningLesson::getWeekFreq, weekFreq)
                 .set(LearningLesson::getPlanStatus, PlanStatus.PLAN_RUNNING)
+                .set(LearningLesson::getLearnedSections,0)  // 赋值0，避免提交学习记录时NPE错误
                 .eq(LearningLesson::getCourseId, courseId)
                 .eq(LearningLesson::getUserId, userId).update();
 
