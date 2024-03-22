@@ -125,7 +125,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         // 获取当前登录用户
         Long userId = UserContext.getUser();
         // 处理学习记录
-        boolean finished = false;
+        boolean finished;
         if (dto.getSectionType().equals(SectionType.EXAM)) {
             // 提交考试记录
             finished = handleExamRecord(userId, dto);
@@ -202,7 +202,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
             if (!result) {
                 throw new DbException("新增视频播放记录失败");
             }
-            // 返回false是因为新增
+            // 返回false是因为新增，默认为未完成
             return false;
         }
         // 判断本小节是否是首次完成：之前未完成且视频播放进度大于50%
@@ -242,7 +242,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
     private LearningRecord queryOldRecord(Long lessonId, Long sectionId) {
         // 查询redis缓存
         LearningRecord cacheRecord = taskHandler.readRecordCache(lessonId, sectionId);
-        // redis缓存命中
+        // redis缓存命中，直接返回
         if (cacheRecord != null) {
             return cacheRecord;
         }

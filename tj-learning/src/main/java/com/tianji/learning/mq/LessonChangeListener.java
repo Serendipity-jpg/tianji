@@ -19,14 +19,14 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor  // 使用构造器，lombok会在编译器生成相应的方法
+@RequiredArgsConstructor  // 使用构造器注入，lombok会在编译器生成相应的方法
 public class LessonChangeListener {
 
     private final ILearningLessonService lessonService;
 
 
     /***
-     * MQ消息发送
+     * MQ消息发送相关代码：
      *         rabbitMqHelper.send(
      *                 MqConstants.Exchange.ORDER_EXCHANGE, // Exchange
      *                 MqConstants.Key.ORDER_PAY_KEY,    // Key

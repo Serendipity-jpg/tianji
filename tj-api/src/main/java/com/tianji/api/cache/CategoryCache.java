@@ -31,6 +31,11 @@ public class CategoryCache {
         });
     }
 
+    /**
+     * 根据三级分类id拼接三级分类名称
+     * @param ids   一级分类id、二级分类id、三级分类id
+     * @return  拼接三级分类名称，用/分隔
+     */
     public String getCategoryNames(List<Long> ids) {
         if (ids == null || ids.size() == 0) {
             return "";

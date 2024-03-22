@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.DelayQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -33,51 +35,63 @@ public class LearningRecordDelayTaskHandler {
     private final ILearningLessonService lessonService;
     // volatile关键字：在多线程环境中，当一个线程修改了这个变量的值，其他线程能够立即看到最新的值。
     private static volatile boolean begin = true;
+    // 线程池
+    private static ExecutorService executor = null;
+
 
     // 项目启动后，当前类实例化 属性注入值后 该方法会运行，一般用于初始化工作
     @PostConstruct
-    public void init(){
+    public void init() {
         log.info("init方法执行了");
+        // 核心线程数等于CPU核心数
+        Integer corePoolSize = Runtime.getRuntime().availableProcessors();
+        // 创建线程池
+        executor = Executors.newFixedThreadPool(corePoolSize);
         CompletableFuture.runAsync(this::handleDelayTask);
+        // executor.execute(this::handleDelayTask);
     }
 
     // 项目销毁前后，关闭延迟队列
     @PreDestroy
-    public void destroy(){
+    public void destroy() {
         log.debug("关闭学习记录处理的延迟任务");
+        // 关闭线程池
+        executor.shutdown();
         begin = false;
     }
 
     /**
      * 处理延时任务
      */
-    private void handleDelayTask(){
-        while (begin){
+    private void handleDelayTask() {
+        while (begin) {
             try {
                 // 1.尝试获取任务，poll：非阻塞方法，take非阻塞方法
                 DelayTask<RecordTaskData> task = queue.take();
-                RecordTaskData data = task.getData();
-                // 2.读取Redis缓存
-                LearningRecord record = readRecordCache(data.getLessonId(), data.getSectionId());
-                log.debug("获取到要处理的播放记录任务，任务数据：{}，缓存数据：{}",task.getData(),record);
-                if (record == null) {
-                    continue;
-                }
-                // 3.比较新提交的延迟任务的视频播放进度数值和redis缓存中的是否一致
-                if(!Objects.equals(data.getMoment(), record.getMoment())){
-                    // 4.如果不一致，播放进度在变化，无需持久化
-                    continue;
-                }
-                // 5.如果一致，证明用户离开了视频，需要持久化
-                // 5.1.更新学习记录
-                record.setFinished(null);
-                recordMapper.updateById(record);
-                // 5.2.更新课表
-                LearningLesson lesson = new LearningLesson();
-                lesson.setId(data.getLessonId());
-                lesson.setLatestSectionId(data.getSectionId());
-                lesson.setLatestLearnTime(LocalDateTime.now());
-                lessonService.updateById(lesson);
+                executor.submit(()->{
+                    RecordTaskData data = task.getData();
+                    // 2.读取Redis缓存
+                    LearningRecord record = readRecordCache(data.getLessonId(), data.getSectionId());
+                    log.debug("获取到要处理的播放记录任务，任务数据：{}，缓存数据：{}", task.getData(), record);
+                    if (record == null) {
+                        return;
+                    }
+                    // 3.比较新提交的延迟任务的视频播放进度数值和redis缓存中的是否一致
+                    if (!Objects.equals(data.getMoment(), record.getMoment())) {
+                        // 4.如果不一致，播放进度在变化，无需持久化
+                        return;
+                    }
+                    // 5.如果一致，证明用户离开了视频，需要持久化
+                    // 5.1.更新学习记录
+                    record.setFinished(null);
+                    recordMapper.updateById(record);
+                    // 5.2.更新课表
+                    LearningLesson lesson = new LearningLesson();
+                    lesson.setId(data.getLessonId());
+                    lesson.setLatestSectionId(data.getSectionId());
+                    lesson.setLatestLearnTime(LocalDateTime.now());
+                    lessonService.updateById(lesson);
+                });
 
                 log.debug("准备持久化学习记录信息");
             } catch (Exception e) {
@@ -88,9 +102,10 @@ public class LearningRecordDelayTaskHandler {
 
     /**
      * 添加指定学习记录到redis，并提交延迟任务到延迟队列DelayQueue
-     * @param record    学习记录信息
+     *
+     * @param record 学习记录信息
      */
-    public void addLearningRecordTask(LearningRecord record){
+    public void addLearningRecordTask(LearningRecord record) {
         // 1.添加数据到Redis缓存
         writeRecordCache(record);
         // 2.提交延迟任务到延迟队列 DelayQueue
@@ -99,7 +114,8 @@ public class LearningRecordDelayTaskHandler {
 
     /**
      * 更新redis的学习记录
-     * @param record    学习记录信息
+     *
+     * @param record 学习记录信息
      */
     public void writeRecordCache(LearningRecord record) {
         log.debug("更新学习记录的缓存数据");
@@ -120,7 +136,7 @@ public class LearningRecordDelayTaskHandler {
     /**
      * 查询redis指定学习记录
      */
-    public LearningRecord readRecordCache(Long lessonId, Long sectionId){
+    public LearningRecord readRecordCache(Long lessonId, Long sectionId) {
         try {
             // 1.读取Redis数据
             String key = StringUtils.format(RECORD_KEY_TEMPLATE, lessonId);
@@ -141,10 +157,11 @@ public class LearningRecordDelayTaskHandler {
 
     /**
      * 删除redis指定学习记录
+     *
      * @param lessonId  课表id
      * @param sectionId 小节id
      */
-    public void cleanRecordCache(Long lessonId, Long sectionId){
+    public void cleanRecordCache(Long lessonId, Long sectionId) {
         // 删除数据
         String key = StringUtils.format(RECORD_KEY_TEMPLATE, lessonId);
         // hash的key保留，删除value
@@ -153,7 +170,7 @@ public class LearningRecordDelayTaskHandler {
 
     @Data
     @NoArgsConstructor
-    private static class RecordCacheData{
+    private static class RecordCacheData {
         private Long id;
         private Integer moment;
         private Boolean finished;
@@ -167,7 +184,7 @@ public class LearningRecordDelayTaskHandler {
 
     @Data
     @NoArgsConstructor
-    private static class RecordTaskData{
+    private static class RecordTaskData {
         private Long lessonId;
         private Long sectionId;
         private Integer moment;
