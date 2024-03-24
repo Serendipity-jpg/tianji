@@ -1,0 +1,37 @@
+spring:
+  cloud:
+    nacos:
+      server-addr: 192.168.150.101:8848 # nacos注册中心
+      discovery:
+        namespace: f923fb34-cb0a-4c06-8fca-ad61ea61a3f0
+        group: DEFAULT_GROUP
+        ip: 192.168.150.1
+logging:
+  level:
+    com.tianji: debug
+
+# xxl-job配置
+#tj:
+#  xxl-job:
+#    # admin配置
+#    admin:
+#      # xxl-job-admin的访问地址
+#      address: http://localhost:9000/xxl-job-admin
+#    # AccessToken，可不填
+#    accessToken: 123456
+#    # executor配置
+#    executor:
+#      # 执行器名称
+#      appName: xxl_job
+#      # 执行器地址
+#      address: http://localhost:9000/xxl-job-executor
+#      # 执行器IP，可不填
+#      ip:
+#      # 执行器端口，0表示随机
+#      port: 0
+#      # 日志路径
+#      logPath: D:/test/applogs/xxl-job/jobhandler
+#      # 日志保留天数
+#      logRetentionDays: 3
+
+

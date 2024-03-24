@@ -2,11 +2,11 @@ package com.tianji.learning.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.api.client.user.UserClient;
+import com.tianji.api.constants.RedisConstants;
 import com.tianji.api.dto.user.UserDTO;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.exceptions.BadRequestException;
@@ -22,6 +22,7 @@ import com.tianji.learning.mapper.InteractionQuestionMapper;
 import com.tianji.learning.mapper.InteractionReplyMapper;
 import com.tianji.learning.service.IInteractionReplyService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
 
     private final InteractionQuestionMapper questionMapper;
     private final UserClient userClient;
+    private final StringRedisTemplate redisTemplate;
 
     private final String DATA_FIELD_NAME_LIKED_TIME = "liked_times";
     private final String DATA_FIELD_NAME_CREATE_TIME = "create_time";
@@ -60,7 +62,6 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         // 获取当前登录用户
         Long userId = UserContext.getUser();
         reply.setUserId(userId);
-        System.out.println(reply.getUserId());
         // 保存评论或回答
         this.save(reply);
         // 查询关联的问题
@@ -91,8 +92,9 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
 
     /**
      * 用户端分页查询回答或评论列表
+     *
      * @param pageQuery 分页参数
-     * @return  分页列表
+     * @return 分页列表
      */
     @Override
     public PageDTO<ReplyVO> pageUser(ReplyPageQuery pageQuery) {
@@ -159,7 +161,13 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (targetReply != null && !targetReply.getAnonymity() && targetUserDTO != null) {    // 目标回复非匿名才赋值
                 replyVO.setTargetUserName(targetUserDTO.getName()); // 目标用户昵称
             }
-            replyVOS.add(replyVO);
+            // 统计该业务id的总点赞数 - 基于redis实现
+            String key = RedisConstants.LIKE_BIZ_KEY_PREFIX + reply.getId();
+            Long likedTimes = redisTemplate.opsForSet().size(key);
+            if (likedTimes != null){
+                replyVO.setLikedTimes(likedTimes.intValue());
+            }
+                replyVOS.add(replyVO);
         }
         // 返回结果
         return PageDTO.of(replyPage, replyVOS);
@@ -172,7 +180,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         if (!CollUtil.isEmpty(userDTOS)) {
             // 封装到map
             return userDTOS.stream().collect(Collectors.toMap(UserDTO::getId, userDTO -> userDTO));
-        }else{
+        } else {
             // 否则返回空map
             return new HashMap<>();
         }
@@ -264,8 +272,9 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
 
     /**
      * 管理端分页查询回答或评论列表
+     *
      * @param pageQuery 分页参数
-     * @return  分页列表
+     * @return 分页列表
      */
     @Override
     public PageDTO<ReplyVO> pageAdmin(ReplyPageQuery pageQuery) {
@@ -331,8 +340,15 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (targetReply != null && !targetReply.getAnonymity() && targetUserDTO != null) {    // 目标回复非匿名才赋值
                 replyVO.setTargetUserName(targetUserDTO.getName()); // 目标用户昵称
             }
+            // 统计该业务id的总点赞数 - 基于redis实现
+            String key = RedisConstants.LIKE_BIZ_KEY_PREFIX + reply.getId();
+            Long likedTimes = redisTemplate.opsForSet().size(key);
+            if (likedTimes != null){
+                replyVO.setLikedTimes(likedTimes.intValue());
+            }
             replyVOS.add(replyVO);
         }
+
         // 返回结果
         return PageDTO.of(replyPage, replyVOS);
     }
@@ -342,19 +358,19 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
      *
      * @param id     回答或评论id
      * @param hidden 回答或评论 0显示/1隐藏
-     * @return  是否成功
+     * @return 是否成功
      */
     @Override
     @Transactional
     public boolean updateReplyHiddenById(Long id, Boolean hidden) {
         InteractionReply reply = getById(id);
-        if (reply == null){
+        if (reply == null) {
             throw new BadRequestException("参数异常");
         }
         // 判断是回答还是评论
-        if (reply.getAnswerId() == 0){   // 如果是回答，需要隐藏回答下的评论
+        if (reply.getAnswerId() == 0) {   // 如果是回答，需要隐藏回答下的评论
             // 根据当前回答reply的id匹配该回答下的评论，修改状态为hidden
-            this.lambdaUpdate().set(InteractionReply::getHidden,hidden)
+            this.lambdaUpdate().set(InteractionReply::getHidden, hidden)
                     .eq(InteractionReply::getAnswerId, reply.getId())
                     .update();
 

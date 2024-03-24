@@ -1,6 +1,7 @@
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.tianji.api.client.remark.RemarkClient;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.domain.query.PageQuery;
 import com.tianji.learning.LearningApplication;
@@ -23,6 +24,9 @@ public class MPTest {
 
     @Autowired
     private ILearningLessonService lessonService;
+
+    @Autowired
+    private RemarkClient remarkClient;
 
     @Test
     public void test() {
@@ -69,6 +73,11 @@ public class MPTest {
                 .page(of);
         PageDTO<LearningLesson> pageDTO = PageDTO.of(learningLessonPage);
         System.out.println(pageDTO);
+    }
+
+    @Test
+    private void test4(){
+        remarkClient.getLikesStatusByBizIds(List.of(1771175499951771650L));
     }
 }
 
