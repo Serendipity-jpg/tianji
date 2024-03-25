@@ -9,6 +9,8 @@ import com.tianji.api.client.remark.RemarkClient;
 import com.tianji.api.client.user.UserClient;
 import com.tianji.api.constants.RedisConstants;
 import com.tianji.api.dto.user.UserDTO;
+import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
+import com.tianji.common.constants.MqConstants;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
@@ -21,6 +23,7 @@ import com.tianji.learning.domain.vo.ReplyVO;
 import com.tianji.learning.enums.QuestionStatus;
 import com.tianji.learning.mapper.InteractionQuestionMapper;
 import com.tianji.learning.mapper.InteractionReplyMapper;
+import com.tianji.learning.mq.SignInMessage;
 import com.tianji.learning.service.IInteractionReplyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -45,6 +48,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
     private final UserClient userClient;
     private final RemarkClient remarkClient;
     private final StringRedisTemplate redisTemplate;
+    private final RabbitMqHelper rabbitMqHelper;
 
     private final String DATA_FIELD_NAME_LIKED_TIME = "liked_times";
     private final String DATA_FIELD_NAME_CREATE_TIME = "create_time";
@@ -88,7 +92,10 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         }
         // 更新问题
         questionMapper.updateById(question);
-        // TODO 尝试更新积分
+        // 发送MQ消息，新增积分
+        rabbitMqHelper.send(MqConstants.Exchange.LEARNING_EXCHANGE,
+                MqConstants.Key.WRITE_REPLY,
+                SignInMessage.of(userId,5));    // 一个问题+5积分
 
     }
 

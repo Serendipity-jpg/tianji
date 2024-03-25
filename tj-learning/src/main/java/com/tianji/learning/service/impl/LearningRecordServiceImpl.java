@@ -6,6 +6,8 @@ import com.tianji.api.client.course.CourseClient;
 import com.tianji.api.dto.course.CourseFullInfoDTO;
 import com.tianji.api.dto.leanring.LearningLessonDTO;
 import com.tianji.api.dto.leanring.LearningRecordDTO;
+import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
+import com.tianji.common.constants.MqConstants;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.exceptions.DbException;
 import com.tianji.common.utils.UserContext;
@@ -15,6 +17,7 @@ import com.tianji.learning.domain.po.LearningRecord;
 import com.tianji.learning.enums.LessonStatus;
 import com.tianji.learning.enums.SectionType;
 import com.tianji.learning.mapper.LearningRecordMapper;
+import com.tianji.learning.mq.SignInMessage;
 import com.tianji.learning.service.ILearningLessonService;
 import com.tianji.learning.service.ILearningRecordService;
 import com.tianji.learning.util.LearningRecordDelayTaskHandler;
@@ -42,6 +45,8 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
     private final CourseClient courseClient;
 
     private final LearningRecordDelayTaskHandler taskHandler;
+
+    private final RabbitMqHelper rabbitMqHelper;
 
     /**
      * 查询当前用户指定课程的学习进度
@@ -220,6 +225,13 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
             taskHandler.addLearningRecordTask(record);
             // 返回，本小节未完成
             return false;
+        }
+        // 首次完成视频播放，可以增加积分，发送MQ消息实现
+        if (isFinished) {
+            // 发送MQ消息实现观看学习视频获取积分
+            rabbitMqHelper.send(MqConstants.Exchange.LEARNING_EXCHANGE,
+                    MqConstants.Key.LEARN_SECTION,
+                    SignInMessage.of(userId,10));   // 学习一个视频 + 10积分
         }
         boolean result = this.lambdaUpdate()
                 .set(LearningRecord::getMoment, dto.getMoment())
