@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.tianji.api.client.remark.RemarkClient;
 import com.tianji.api.client.user.UserClient;
 import com.tianji.api.constants.RedisConstants;
 import com.tianji.api.dto.user.UserDTO;
@@ -42,6 +43,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
 
     private final InteractionQuestionMapper questionMapper;
     private final UserClient userClient;
+    private final RemarkClient remarkClient;
     private final StringRedisTemplate redisTemplate;
 
     private final String DATA_FIELD_NAME_LIKED_TIME = "liked_times";
@@ -118,6 +120,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         List<Long> userIds = new ArrayList<>();
         List<Long> targetUserIds = new ArrayList<>();   // 目标用户id
         List<Long> targetReplyIds = new ArrayList<>();   // 目标回复id
+        List<Long> replyIds = new ArrayList<>();    // 回答或评论id
         for (InteractionReply reply : records) {
             if (!reply.getAnonymity()) { // 非匿名用户需要查询
                 userIds.add(reply.getUserId());
@@ -131,6 +134,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (reply.getTargetReplyId() != null && reply.getTargetReplyId() > 0) {
                 targetReplyIds.add(reply.getTargetReplyId());
             }
+            replyIds.add(reply.getId());
         }
         // 查询目标回复列表并封装为Map
         Map<Long, InteractionReply> targetReplyMap = new HashMap<>();
@@ -144,6 +148,8 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         // 查询用户和目标回复用户并封装为Map
         Map<Long, UserDTO> userMap = getUserDTOMap(userIds);
         Map<Long, UserDTO> targetUserMap = getUserDTOMap(targetUserIds);
+        // 查询用户是否点赞
+        Set<Long> likedBizIds = remarkClient.getLikesStatusByBizIds(replyIds);
         // 保存结果
         List<ReplyVO> replyVOS = new ArrayList<>();
         for (InteractionReply reply : records) {
@@ -161,13 +167,9 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (targetReply != null && !targetReply.getAnonymity() && targetUserDTO != null) {    // 目标回复非匿名才赋值
                 replyVO.setTargetUserName(targetUserDTO.getName()); // 目标用户昵称
             }
-            // 统计该业务id的总点赞数 - 基于redis实现
-            String key = RedisConstants.LIKE_BIZ_KEY_PREFIX + reply.getId();
-            Long likedTimes = redisTemplate.opsForSet().size(key);
-            if (likedTimes != null){
-                replyVO.setLikedTimes(likedTimes.intValue());
-            }
-                replyVOS.add(replyVO);
+            // 判断当前用户是否点赞
+            replyVO.setLiked(likedBizIds.contains(reply.getId()));
+            replyVOS.add(replyVO);
         }
         // 返回结果
         return PageDTO.of(replyPage, replyVOS);
@@ -297,6 +299,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         List<Long> userIds = new ArrayList<>();
         List<Long> targetUserIds = new ArrayList<>();   // 目标用户id
         List<Long> targetReplyIds = new ArrayList<>();   // 目标回复id
+        List<Long> replyIds = new ArrayList<>();    // 回答或评论id
         for (InteractionReply reply : records) {
             if (!reply.getAnonymity()) { // 非匿名用户需要查询
                 userIds.add(reply.getUserId());
@@ -310,6 +313,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (reply.getTargetReplyId() != null && reply.getTargetReplyId() > 0) {
                 targetReplyIds.add(reply.getTargetReplyId());
             }
+            replyIds.add(reply.getId());
         }
         // 查询目标回复列表并封装为Map
         Map<Long, InteractionReply> targetReplyMap = new HashMap<>();
@@ -323,6 +327,8 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         // 查询用户和目标回复用户并封装为Map
         Map<Long, UserDTO> userMap = getUserDTOMap(userIds);
         Map<Long, UserDTO> targetUserMap = getUserDTOMap(targetUserIds);
+        // 查询用户是否点赞
+        Set<Long> likedBizIds = remarkClient.getLikesStatusByBizIds(replyIds);
         // 保存结果
         List<ReplyVO> replyVOS = new ArrayList<>();
         for (InteractionReply reply : records) {
@@ -340,12 +346,8 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             if (targetReply != null && !targetReply.getAnonymity() && targetUserDTO != null) {    // 目标回复非匿名才赋值
                 replyVO.setTargetUserName(targetUserDTO.getName()); // 目标用户昵称
             }
-            // 统计该业务id的总点赞数 - 基于redis实现
-            String key = RedisConstants.LIKE_BIZ_KEY_PREFIX + reply.getId();
-            Long likedTimes = redisTemplate.opsForSet().size(key);
-            if (likedTimes != null){
-                replyVO.setLikedTimes(likedTimes.intValue());
-            }
+            // 判断当前用户是否点赞
+            replyVO.setLiked(likedBizIds.contains(reply.getId()));
             replyVOS.add(replyVO);
         }
 

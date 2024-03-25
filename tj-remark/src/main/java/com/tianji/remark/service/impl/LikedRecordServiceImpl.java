@@ -233,7 +233,6 @@ public class LikedRecordServiceImpl extends ServiceImpl<LikedRecordMapper, Liked
                 return null;
             }
         });
-
         // 根据管道操作的结果列表 objects，筛选出当前用户点赞过的业务id列表
         return IntStream.range(0, objects.size())  // 遍历结果列表的索引范围
                 .filter(i -> (Boolean) objects.get(i))  // 过滤出返回值为 true 的索引
