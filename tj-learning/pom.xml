@@ -28,6 +28,12 @@
             <artifactId>tj-api</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <!--tj-common-->
+        <dependency>
+            <groupId>com.tianji</groupId>
+            <artifactId>tj-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
         <!--web-->
         <dependency>
             <groupId>org.springframework.boot</groupId>

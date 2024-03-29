@@ -18,4 +18,11 @@ public interface IPointsBoardSeasonService extends IService<PointsBoardSeason> {
      * 查询历史赛季列表
      */
     List<PointsBoardSeason> getHistorySeasonList();
+
+    /**
+     * 创建上赛季表
+     */
+    void createPointsBoardTableOfLastSeason(String tableName);
+
+
 }

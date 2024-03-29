@@ -1,4 +1,4 @@
-package com.tianji.learning.util;
+package com.tianji.learning.task;
 
 import com.tianji.common.utils.JsonUtils;
 import com.tianji.common.utils.StringUtils;
@@ -6,6 +6,7 @@ import com.tianji.learning.domain.po.LearningLesson;
 import com.tianji.learning.domain.po.LearningRecord;
 import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.service.ILearningLessonService;
+import com.tianji.learning.util.DelayTask;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;

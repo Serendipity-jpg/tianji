@@ -26,6 +26,8 @@ spring:
             refresh: false
           - data-id: shared-bizTypes.yaml # 共享点赞业务配置
             refresh: false
+          - data-id: shared-xxljob.yaml # 共享xxl-job配置文件
+            refresh: false
 tj:
   swagger:
     enable: true

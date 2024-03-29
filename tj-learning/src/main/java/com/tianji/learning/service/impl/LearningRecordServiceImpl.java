@@ -20,7 +20,7 @@ import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.mq.SignInMessage;
 import com.tianji.learning.service.ILearningLessonService;
 import com.tianji.learning.service.ILearningRecordService;
-import com.tianji.learning.util.LearningRecordDelayTaskHandler;
+import com.tianji.learning.task.LearningRecordDelayTaskHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

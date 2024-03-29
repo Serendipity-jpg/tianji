@@ -29,4 +29,9 @@ public interface IPointsRecordService extends IService<PointsRecord> {
      * @return  今日积分列表
      */
     List<PointsStatisticsVO> getTodayPoints();
+
+    /**
+     * 生成上赛季积分明细表
+     */
+    void createPointsRecordTableOfLastSeason(String tableName);
 }

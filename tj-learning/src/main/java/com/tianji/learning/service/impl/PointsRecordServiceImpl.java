@@ -3,6 +3,7 @@ package com.tianji.learning.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.tianji.api.constants.RedisConstants;
 import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.UserContext;
 import com.tianji.learning.domain.po.PointsRecord;
@@ -12,10 +13,12 @@ import com.tianji.learning.mapper.PointsRecordMapper;
 import com.tianji.learning.mq.SignInMessage;
 import com.tianji.learning.service.IPointsRecordService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +36,8 @@ import java.util.stream.Collectors;
 public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, PointsRecord> implements IPointsRecordService {
 
     private final PointsRecordMapper recordMapper;
+    private final StringRedisTemplate redisTemplate;
+
 
     /**
      * 保存积分
@@ -46,9 +51,9 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         boolean hasMaxPoints = recordType.getMaxPoints() > 0;
         Long userId = message.getUserId();  // 获取当前登录用户信息
         // 如果有上限制，查询该用户今日该积分类型已获得的积分数量
+        LocalDateTime now = LocalDateTime.now();
         int currentPoints = 0;
         if (hasMaxPoints) {
-            LocalDateTime now = LocalDateTime.now();
             LocalDateTime dayStartTime = DateUtils.getDayStartTime(now);    // 当前开始时间
             LocalDateTime dayEndTime = DateUtils.getDayEndTime(now);    // 当天结束时间
             QueryWrapper<PointsRecord> wrapper = new QueryWrapper<>();
@@ -70,12 +75,17 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         }
         // 计算实际应保存的积分数量
         int savePoints = hasMaxPoints ? Math.min(recordType.getMaxPoints() - currentPoints, message.getPoints()) : message.getPoints();
-        // 保存积分
+        // 保存积分明细
         PointsRecord pointsRecord = PointsRecord.builder().userId(userId)
                 .type(recordType)
                 .points(savePoints)
                 .build();
         this.save(pointsRecord);
+        // 累加并保存该用户总积分到redis的zset，用于生成当前赛季的排行榜
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMM");
+        String key = RedisConstants.POINTS_BOARD_KEY_PREFIX + formatter.format(now);
+        // incrementScore，如果key存在，则给对应的value（用户id）的score加上增量detal（新增积分数量）,没有则新创建并赋值
+        redisTemplate.opsForZSet().incrementScore(key, userId.toString(), savePoints);
     }
 
     /**
@@ -112,5 +122,15 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
             return recordVO;
         }).collect(Collectors.toList());
         return voList;
+    }
+
+    /**
+     * 生成上赛季积分明细表
+     *
+     * @param tableName 表名
+     */
+    @Override
+    public void createPointsRecordTableOfLastSeason(String tableName) {
+        recordMapper.createPointsRecordTableOfLastSeason(tableName);
     }
 }

@@ -2,4 +2,27 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.tianji.learning.mapper.PointsBoardMapper">
 
+    <resultMap id="resultMap" type="com.tianji.learning.domain.vo.PointsBoardVO">
+        <id property="rank" column="id" />
+        <result property="points" column="points"/>
+    </resultMap>
+
+    <select id="queryMyHistoryBoardRank" resultMap="resultMap">
+        select id,points
+        from `${tableName}`
+        where user_id = #{userId}
+    </select>
+
+
+    <resultMap id="resultMap2" type="com.tianji.learning.domain.po.PointsBoard">
+        <id property="rank" column="id" />
+        <result property="points" column="points"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+    <select id="queryHistoryBoardRankList" resultType="com.tianji.learning.domain.po.PointsBoard">
+        select  id, user_id, points
+        from `${tableName}`
+        order by id asc
+        limit #{pageNo}, #{pageSize}
+    </select>
 </mapper>

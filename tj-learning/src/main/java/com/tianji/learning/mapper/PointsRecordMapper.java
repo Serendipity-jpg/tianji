@@ -2,6 +2,7 @@ package com.tianji.learning.mapper;
 
 import com.tianji.learning.domain.po.PointsRecord;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * <p>
@@ -12,4 +13,10 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  */
 public interface PointsRecordMapper extends BaseMapper<PointsRecord> {
 
+    /**
+     * 生成上赛季积分明细表
+     *
+     * @param tableName 表名
+     */
+    void createPointsRecordTableOfLastSeason(@Param("tableName") String tableName);
 }

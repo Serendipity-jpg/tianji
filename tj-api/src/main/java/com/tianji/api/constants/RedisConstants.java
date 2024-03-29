@@ -13,4 +13,7 @@ public class RedisConstants {
 
     // 点赞的key前缀，后面需要拼接用户id和年月，如sign:uid:111:202403
     public static final String  SIGN_RECORD_KEY_PREFIX = "sign:uid:";
+
+    // 排行榜的的key前缀，后面需要拼接赛季年月，如boards:202403，采用zset，存储user_id-score（总积分）键值对
+    public static final String  POINTS_BOARD_KEY_PREFIX = "boards:";
 }

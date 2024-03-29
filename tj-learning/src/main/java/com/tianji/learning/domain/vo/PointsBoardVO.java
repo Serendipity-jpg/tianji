@@ -2,12 +2,18 @@ package com.tianji.learning.domain.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Data
 @ApiModel(description = "积分榜单汇总信息")
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PointsBoardVO {
     @ApiModelProperty("我的榜单排名")
     private Integer rank;

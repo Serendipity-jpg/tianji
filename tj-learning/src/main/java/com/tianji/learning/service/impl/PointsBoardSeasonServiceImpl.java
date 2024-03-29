@@ -6,6 +6,7 @@ import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.learning.domain.po.PointsBoardSeason;
 import com.tianji.learning.mapper.PointsBoardSeasonMapper;
 import com.tianji.learning.service.IPointsBoardSeasonService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,7 +19,10 @@ import java.util.List;
  * @author Sakura
  */
 @Service
+@RequiredArgsConstructor
 public class PointsBoardSeasonServiceImpl extends ServiceImpl<PointsBoardSeasonMapper, PointsBoardSeason> implements IPointsBoardSeasonService {
+
+    private final PointsBoardSeasonMapper pointsBoardSeasonMapper;
 
     /**
      * 查询历史赛季列表
@@ -30,5 +34,15 @@ public class PointsBoardSeasonServiceImpl extends ServiceImpl<PointsBoardSeasonM
             throw new BizIllegalException("查询历史赛季列表失败");
         }
         return seasonList;
+    }
+
+    /**
+     * 创建上赛季表
+     *
+     * @param tableName 上赛季表名
+     */
+    @Override
+    public void createPointsBoardTableOfLastSeason(String tableName) {
+        pointsBoardSeasonMapper.createPointsBoardTableOfLastSeason(tableName);
     }
 }

@@ -37,9 +37,9 @@ public class LikedTimesCheckTask {
     /**
      * 每20s执行1次，将redis的各业务的点赞数量发送消息到RabbitMQ
      */
-    @Scheduled(fixedDelay = 20000)  // 单位ms，即等价于20s
+    // @Scheduled(fixedDelay = 20000)  // 单位ms，即等价于20s
     // @Scheduled(cron = "0/20 * * * * ?") // 每20s执行一次
-    // @XxlJob("checkLikedTimes")
+    @XxlJob("checkLikedTimes") // 更换xxl-job实现分布式定时任务
     private void checkLikedTimes() {
         for (String bizType : bizTypes) {
             // 从redis中zset读取得分低于MAX_BIZ_SIZE的业务的点赞数量，并发送RabbitMQ消息

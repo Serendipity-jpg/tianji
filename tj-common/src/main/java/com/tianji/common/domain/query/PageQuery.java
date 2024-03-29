@@ -6,7 +6,9 @@ import com.tianji.common.constants.Constant;
 import com.tianji.common.utils.StringUtils;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import javax.validation.constraints.Min;
@@ -14,6 +16,7 @@ import javax.validation.constraints.Min;
 @Data
 @ApiModel(description = "分页请求参数")
 @Accessors(chain = true)
+@NoArgsConstructor
 public class PageQuery {
     public static final Integer DEFAULT_PAGE_SIZE = 20;
     public static final Integer DEFAULT_PAGE_NUM = 1;
