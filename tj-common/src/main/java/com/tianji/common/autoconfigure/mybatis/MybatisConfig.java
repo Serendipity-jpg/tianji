@@ -44,7 +44,8 @@ public class MybatisConfig {
         }
         // 分页插件配置
         PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);
-        paginationInnerInterceptor.setMaxLimit(200L);
+        paginationInnerInterceptor.setMaxLimit(200L);   // 单页分页条数限制(默认无限制)
+        paginationInnerInterceptor.setOverflow(true);   // 溢出总页数后是否进行处理(默认不处理)
         interceptor.addInnerInterceptor(paginationInnerInterceptor);
         // 字段填充插件
         interceptor.addInnerInterceptor(new MyBatisAutoFillInterceptor());
