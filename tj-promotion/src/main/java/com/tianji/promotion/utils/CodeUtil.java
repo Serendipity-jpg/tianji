@@ -93,7 +93,7 @@ public class CodeUtil {
     /**
      * 生成兑换码
      *
-     * @param serialNum 递增序列号
+     * @param serialNum 递增序列（自增id）
      * @return 兑换码
      */
     public static String generateCode(long serialNum, long fresh) {
@@ -103,7 +103,7 @@ public class CodeUtil {
         long payload = fresh << FRESH_BIT_OFFSET | serialNum;
         // 3.计算验证码
         long checkCode = calcCheckCode(payload, (int) fresh);
-        System.out.println("checkCode = " + checkCode);
+        // System.out.println("checkCode = " + checkCode);
         // 4.payload做大质数异或运算，混淆数据
         payload ^= XOR_TABLE[(int) (checkCode & FRESH_MASK)];
         // 5.拼接兑换码明文: 校验码（14位） + payload（36位）
@@ -112,6 +112,9 @@ public class CodeUtil {
         return Base32.encode(code);
     }
 
+    /**
+     * 计算验证码
+     */
     private static long calcCheckCode(long payload, int fresh) {
         // 1.获取码表
         int[] table = PRIME_TABLE[fresh];
@@ -125,6 +128,10 @@ public class CodeUtil {
         return sum & CHECK_CODE_MASK;
     }
 
+    /***
+     * 解析兑换码
+     * @param code  兑换码
+     */
     public static long parseCode(String code) {
         if (code == null || !code.matches(RegexConstants.COUPON_CODE_PATTERN)) {
             // 兑换码格式错误
@@ -146,4 +153,6 @@ public class CodeUtil {
         }
         return payload & SERIAL_NUM_MASK;
     }
+
+
 }

@@ -6,8 +6,14 @@ import cn.hutool.core.text.StrBuilder;
  * 将整数转为base32字符的工具，因为是32进制，所以每5个bit位转一次
  */
 public class Base32 {
+    /**
+     * 基础的32中字符
+     */
     private final static String baseChars = "6CSB7H8DAKXZF3N95RTMVUQG2YE4JWPL";
 
+    /**
+     * 编码
+     */
     public static String encode(long raw) {
         StrBuilder sb = new StrBuilder();
         while (raw != 0) {
@@ -18,6 +24,9 @@ public class Base32 {
         return sb.toString();
     }
 
+    /**
+     * 解码
+     */
     public static long decode(String code) {
         long r = 0;
         char[] chars = code.toCharArray();

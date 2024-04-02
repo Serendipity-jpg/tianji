@@ -11,27 +11,32 @@ import com.tianji.api.dto.course.CategoryBasicDTO;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
+import com.tianji.common.utils.UserContext;
 import com.tianji.promotion.domain.dto.CouponFormDTO;
 import com.tianji.promotion.domain.dto.CouponIssueFormDTO;
 import com.tianji.promotion.domain.po.Coupon;
 import com.tianji.promotion.domain.po.CouponScope;
+import com.tianji.promotion.domain.po.UserCoupon;
 import com.tianji.promotion.domain.query.CouponQuery;
 import com.tianji.promotion.domain.vo.CouponDetailVO;
 import com.tianji.promotion.domain.vo.CouponPageVO;
 import com.tianji.promotion.domain.vo.CouponScopeVO;
+import com.tianji.promotion.domain.vo.CouponVO;
 import com.tianji.promotion.enums.CouponScopeType;
 import com.tianji.promotion.enums.CouponStatus;
+import com.tianji.promotion.enums.ObtainType;
+import com.tianji.promotion.enums.UserCouponStatus;
 import com.tianji.promotion.mapper.CouponMapper;
 import com.tianji.promotion.service.ICouponScopeService;
 import com.tianji.promotion.service.ICouponService;
+import com.tianji.promotion.service.IExchangeCodeService;
+import com.tianji.promotion.service.IUserCouponService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +52,8 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
 
     private final ICouponScopeService couponScopeService;
     private final CategoryClient categoryClient;
+    private final IExchangeCodeService exchangeCodeService;
+    private final IUserCouponService userCouponService;
 
     /**
      * 新增优惠券
@@ -151,11 +158,17 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         } else {
             couponDB.setStatus(CouponStatus.UN_ISSUE);  // 更新当前优惠券状态为未开始
         }
-        // 更新
+        // 更新优惠券信息
         this.updateById(couponDB);
 
-        // 如果优惠券领取方式为指定发放，需要生成兑换码
-        // TODO 生成兑换码
+        // 如果优惠券领取方式为指定发放，且之前状态为待发放（防止重复生成兑换码），需要生成兑换码
+        if (coupon.getObtainWay().equals(ObtainType.ISSUE)
+                && coupon.getStatus().equals(CouponStatus.DRAFT)) {
+            // 兑换码兑换的截止时间是优惠券领取的的截止时间（前端传递）
+            coupon.setIssueEndTime(couponDB.getIssueEndTime());
+            // 异步生成兑换码
+            exchangeCodeService.asyncGenerateExchangeCode(coupon);
+        }
     }
 
     /**
@@ -236,11 +249,11 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         Map<Long, String> categoryMap = categoryBasicDTOS.stream().collect(Collectors.toMap(CategoryBasicDTO::getId,
                 categoryBasicDTO -> categoryBasicDTO.getName()));
         List<CouponScopeVO> scopeVOList = couponScopes.stream().map(couponScope ->
-                        CouponScopeVO.builder()
-                                .id(couponScope.getBizId())
-                                .name(categoryMap.getOrDefault(couponScope.getBizId(), "")) // 分类名称赋值
-                                .build()
-                ).collect(Collectors.toList());
+                CouponScopeVO.builder()
+                        .id(couponScope.getBizId())
+                        .name(categoryMap.getOrDefault(couponScope.getBizId(), "")) // 分类名称赋值
+                        .build()
+        ).collect(Collectors.toList());
         couponDetailVO.setScopes(scopeVOList);
         return couponDetailVO;
     }
@@ -275,11 +288,57 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
             throw new BadRequestException("优惠券不存在");
         }
         // 修改优惠券状态为暂停，只有发放中的优惠券可以被暂停
-        if (!coupon.getStatus().equals(CouponStatus.ISSUING)){
+        if (!coupon.getStatus().equals(CouponStatus.ISSUING)) {
             throw new BizIllegalException("该优惠券不可被暂停发放");
         }
         coupon.setStatus(CouponStatus.PAUSE);
         this.updateById(coupon);
+    }
+
+    /**
+     * 查询发放中的优惠券列表 - 用户端
+     *
+     * @return 发放中的优惠券列表
+     */
+    @Override
+    public List<CouponVO> queryIssuingCouponList() {
+        // 查询db,条件：状态为发放中、领取方式为手动领取
+        List<Coupon> coupons = this.lambdaQuery()
+                .eq(Coupon::getStatus, CouponStatus.ISSUING)    // 状态为发放中
+                .eq(Coupon::getObtainWay, ObtainType.PUBLIC)     // 领取方式为手动领取
+                .list();
+        if (CollUtil.isEmpty(coupons)) { // 列表判空
+            return Collections.emptyList();
+        }
+        // 获取当前登录用户
+        Long userId = UserContext.getUser();
+        // 获取发放中的优惠券id列表
+        Set<Long> couponIds = coupons.stream().map(Coupon::getId).collect(Collectors.toSet());
+        // 查询user_coupon表，条件：当前用户user_id、发放中的优惠券id列表
+        List<UserCoupon> userCoupons = userCouponService.lambdaQuery().eq(UserCoupon::getUserId, userId)
+                .in(UserCoupon::getCouponId, couponIds)
+                .list();
+        // 统计当前用户针对每个券的已领取数量，即<couponId,allCount>
+        Map<Long, Long> issueMap = userCoupons.stream()
+                .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
+        // 统计当前用户针对每个券的已领取且未使用数量,即<couponId,unUsedCount>
+        Map<Long, Long> unUsedMap = userCoupons.stream()
+                .filter(userCoupon -> userCoupon.getStatus().equals(UserCouponStatus.UNUSED))
+                .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
+        List<CouponVO> couponVOS = new ArrayList<>();
+        // po转vo
+        for (Coupon coupon : coupons) {
+            CouponVO couponVO = BeanUtil.toBean(coupon, CouponVO.class);
+            // 优惠券还有剩余(已发放数量issueNum < 总发放数量totalNum)且用户领取数量(统计user_coupon表)小于该优惠券领取上限user_limit
+            boolean available = coupon.getIssueNum() < coupon.getTotalNum()
+                    && issueMap.getOrDefault(coupon.getId(),0L) < coupon.getUserLimit();
+            couponVO.setAvailable(available);    // 是否可以领取
+            // 统计user_coupon表，查询当前用户已经领取且未使用的券数量是否大于0
+            boolean received = unUsedMap.getOrDefault(coupon.getId(), 0L) > 0;
+            couponVO.setReceived(received); // 是否可以使用
+            couponVOS.add(couponVO);
+        }
+        return couponVOS;
     }
 
     /**

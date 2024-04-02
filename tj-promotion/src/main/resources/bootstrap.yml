@@ -41,4 +41,6 @@ tj:
     database: tj_promotion
   auth:
     resource:
-      enable: true
+      enable: true # 是否需要做登录拦截
+      excludeLoginPaths:  # 放行路径
+        - /coupons/list     # 优惠券列表路径

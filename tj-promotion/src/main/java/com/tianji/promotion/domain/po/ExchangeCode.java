@@ -8,8 +8,10 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
 
 import com.tianji.promotion.enums.ExchangeCodeStatus;
+import com.tianji.promotion.enums.ExchangeCodeType;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -25,13 +27,17 @@ import lombok.experimental.Accessors;
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
 @TableName("exchange_code")
+@Builder
 @ApiModel(value="ExchangeCode对象", description="兑换码")
 public class ExchangeCode implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * 手动输入主键id
+     */
     @ApiModelProperty(value = "兑换码id")
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    @TableId(value = "id", type = IdType.INPUT)
     private Integer id;
 
     @ApiModelProperty(value = "兑换码")
@@ -48,7 +54,7 @@ public class ExchangeCode implements Serializable {
 
     @ApiModelProperty(value = "兑换类型，1：优惠券，以后再添加其它类型")
     @TableField("type")
-    private Integer type;
+    private ExchangeCodeType type;
 
     @ApiModelProperty(value = "兑换码目标id，例如兑换优惠券，该id则是优惠券的配置id")
     @TableField("exchange_target_id")
