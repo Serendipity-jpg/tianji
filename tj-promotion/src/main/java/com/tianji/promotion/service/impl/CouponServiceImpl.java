@@ -11,7 +11,9 @@ import com.tianji.api.dto.course.CategoryBasicDTO;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
+import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.UserContext;
+import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.domain.dto.CouponFormDTO;
 import com.tianji.promotion.domain.dto.CouponIssueFormDTO;
 import com.tianji.promotion.domain.po.Coupon;
@@ -32,6 +34,7 @@ import com.tianji.promotion.service.ICouponService;
 import com.tianji.promotion.service.IExchangeCodeService;
 import com.tianji.promotion.service.IUserCouponService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +57,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
     private final CategoryClient categoryClient;
     private final IExchangeCodeService exchangeCodeService;
     private final IUserCouponService userCouponService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 新增优惠券
@@ -133,23 +137,6 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         // 判断是否立即发放，issueBeginTime为空或者小于等于当前时间
         boolean instantIssue = dto.getIssueBeginTime() == null || !dto.getIssueBeginTime().isAfter(now);
         // 更新当前优惠券状态、领取开始和结束时间、使用开始和结束时间
-        // if (instantIssue) {  // 需要立即发放
-        //     coupon.setStatus(CouponStatus.ISSUING) // 更新当前优惠券状态为发放中
-        //             .setIssueBeginTime(now)   // 领取开始时间
-        //             .setIssueEndTime(dto.getIssueEndTime()) // 领取结束时间，必传
-        //             .setTermDays(dto.getTermDays())  //  有效天数
-        //             .setTermBeginTime(dto.getTermBeginTime()) // 有效期开始时间
-        //             .setTermEndTime(dto.getTermEndTime());  // 有效期结束时间
-        // }else {
-        //     coupon.setStatus(CouponStatus.UN_ISSUE) // 更新当前优惠券状态为未开始
-        //             .setIssueBeginTime(dto.getIssueBeginTime())   // 领取开始时间
-        //             .setIssueEndTime(dto.getIssueEndTime()) // 领取结束时间，必传
-        //             .setTermDays(dto.getTermDays())  //  有效天数，与开始结束时间两者必传一个
-        //             .setTermBeginTime(dto.getTermBeginTime()) // 有效期开始时间
-        //             .setTermEndTime(dto.getTermEndTime());  // 有效期结束时间
-        // }
-        // 更新
-        // this.updateById(coupon);
         Coupon couponDB = BeanUtil.toBean(dto, Coupon.class);
         if (instantIssue) { // 立即发放
             // 领取开始时间前端不一定传，但领取结束时间前端必传
@@ -160,7 +147,20 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         }
         // 更新优惠券信息
         this.updateById(couponDB);
-
+        // 如果优惠券是立刻发放，将部分字段（优惠券id、开始领取时间、结束领取时间、已发放数量、发放总数量、限领数量）存入redis用于实现异步领取优惠券
+        if (instantIssue) {  // 立即发放
+            String key = PromotionConstants.COUPON_CACHE_KEY_PREFIX + coupon.getId();   // 拼接key
+            // 开始领取时间，转成Long方便比较
+            redisTemplate.opsForHash().put(key, "issueBeginTime", String.valueOf(DateUtils.toEpochMilli(now)));
+            // 结束领取时间
+            redisTemplate.opsForHash().put(key, "issueEndTime", String.valueOf(DateUtils.toEpochMilli(dto.getIssueEndTime())));
+            // 发放总数量
+            redisTemplate.opsForHash().put(key, "totalNum", String.valueOf(coupon.getTotalNum()));
+            // 已发放发放数量
+            redisTemplate.opsForHash().put(key, "issueNum", String.valueOf(coupon.getIssueNum()));
+            // 单个用户限领的优惠券数量
+            redisTemplate.opsForHash().put(key, "userLimit", String.valueOf(coupon.getUserLimit()));
+        }
         // 如果优惠券领取方式为指定发放，且之前状态为待发放（防止重复生成兑换码），需要生成兑换码
         if (coupon.getObtainWay().equals(ObtainType.ISSUE)
                 && coupon.getStatus().equals(CouponStatus.DRAFT)) {
@@ -284,15 +284,29 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
     public void pauseIssueCoupon(Long id) {
         // 校验优惠券id
         Coupon coupon = this.getById(id);
-        if (coupon == null) {
+        if (coupon == null) {   // 判空
             throw new BadRequestException("优惠券不存在");
         }
-        // 修改优惠券状态为暂停，只有发放中的优惠券可以被暂停
-        if (!coupon.getStatus().equals(CouponStatus.ISSUING)) {
-            throw new BizIllegalException("该优惠券不可被暂停发放");
+        // 当前券状态必须是未开始或进行中
+        CouponStatus status = coupon.getStatus();
+        if (status != CouponStatus.UN_ISSUE && status != CouponStatus.ISSUING) {
+            // 状态错误，直接结束
+            return;
         }
-        coupon.setStatus(CouponStatus.PAUSE);
-        this.updateById(coupon);
+
+        // 更新状态为暂停发放
+        boolean success = lambdaUpdate()
+                .set(Coupon::getStatus, CouponStatus.PAUSE)
+                .eq(Coupon::getId, id)
+                .in(Coupon::getStatus, CouponStatus.UN_ISSUE, CouponStatus.ISSUING)
+                .update();
+        if (!success) {
+            // 可能是重复更新，结束
+            log.error("重复暂停发放优惠券");
+        }
+
+        // 删除缓存
+        redisTemplate.delete(PromotionConstants.COUPON_CACHE_KEY_PREFIX + id);
     }
 
     /**
@@ -331,7 +345,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
             CouponVO couponVO = BeanUtil.toBean(coupon, CouponVO.class);
             // 优惠券还有剩余(已发放数量issueNum < 总发放数量totalNum)且用户领取数量(统计user_coupon表)小于该优惠券领取上限user_limit
             boolean available = coupon.getIssueNum() < coupon.getTotalNum()
-                    && issueMap.getOrDefault(coupon.getId(),0L) < coupon.getUserLimit();
+                    && issueMap.getOrDefault(coupon.getId(), 0L) < coupon.getUserLimit();
             couponVO.setAvailable(available);    // 是否可以领取
             // 统计user_coupon表，查询当前用户已经领取且未使用的券数量是否大于0
             boolean received = unUsedMap.getOrDefault(coupon.getId(), 0L) > 0;

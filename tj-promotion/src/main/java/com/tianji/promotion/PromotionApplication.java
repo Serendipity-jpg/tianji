@@ -9,6 +9,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -17,6 +18,7 @@ import java.net.UnknownHostException;
 @MapperScan("com.tianji.promotion.mapper")
 @EnableAsync    // 开启异步线程，使用SpringBoot的线程池：ThreadPoolTaskExecutor
 @EnableAspectJAutoProxy(exposeProxy = true) // 暴露代理对象
+@EnableTransactionManagement    // 开始Spring事务管理
 @Slf4j
 public class PromotionApplication {
 

@@ -1,6 +1,8 @@
 package com.tianji.promotion.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.tianji.common.utils.CollUtils;
+import com.tianji.common.utils.DateUtils;
 import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.domain.po.Coupon;
 import com.tianji.promotion.domain.po.ExchangeCode;
@@ -14,8 +16,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import static com.tianji.promotion.constants.PromotionConstants.COUPON_RANGE_KEY;
 
@@ -31,6 +32,25 @@ import static com.tianji.promotion.constants.PromotionConstants.COUPON_RANGE_KEY
 public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, ExchangeCode> implements IExchangeCodeService {
 
     private final StringRedisTemplate redisTemplate;
+
+    /**
+     * 根据兑换码id查询优惠券id
+     *
+     * @param serialNum 兑换码id
+     * @return 优惠券id
+     */
+    @Override
+    public Long getExchangeTargetId(Long serialNum) {
+        // 查询score值比当前序列号大的第一个优惠券
+        Set<String> results = redisTemplate.opsForZSet().rangeByScore(
+                COUPON_RANGE_KEY, serialNum, serialNum + 5000, 0L, 1L);
+        if (CollUtils.isEmpty(results)) {
+            return null;
+        }
+        // 数据转换
+        String next = results.iterator().next();
+        return Long.parseLong(next);
+    }
 
     /**
      * 判断兑换是否已兑换，并根据自增id 进行更新

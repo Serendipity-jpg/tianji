@@ -26,4 +26,11 @@ public interface IExchangeCodeService extends IService<ExchangeCode> {
      * @param flag      更新值
      */
     boolean hasExchanged(long serialNum, boolean flag);
+
+    /**
+     * 根据兑换码id查询优惠券id
+     * @param serialNum 兑换码id
+     * @return  优惠券id
+     */
+    Long getExchangeTargetId(Long serialNum);
 }

@@ -9,6 +9,7 @@
 // import com.tianji.common.exceptions.BadRequestException;
 // import com.tianji.common.exceptions.BizIllegalException;
 // import com.tianji.common.utils.UserContext;
+// import com.tianji.promotion.constants.PromotionConstants;
 // import com.tianji.promotion.domain.po.Coupon;
 // import com.tianji.promotion.domain.po.ExchangeCode;
 // import com.tianji.promotion.domain.po.UserCoupon;
@@ -23,6 +24,9 @@
 // import com.tianji.promotion.service.IUserCouponService;
 // import com.tianji.promotion.utils.CodeUtil;
 // import lombok.RequiredArgsConstructor;
+// import org.aspectj.lang.annotation.Around;
+// import org.redisson.api.RLock;
+// import org.redisson.api.RedissonClient;
 // import org.springframework.aop.framework.AopContext;
 // import org.springframework.data.redis.core.StringRedisTemplate;
 // import org.springframework.stereotype.Service;
@@ -42,11 +46,12 @@
 //  */
 // @Service
 // @RequiredArgsConstructor
-// public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
+// public class UserCouponRedissonServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
 //
 //     private final CouponMapper couponMapper;
 //     private final StringRedisTemplate redisTemplate;
 //     private final IExchangeCodeService exchangeCodeService;
+//     private final RedissonClient redissonClient;
 //
 //     /**
 //      * 查询用户领取的优惠券列表-用户端
@@ -109,7 +114,17 @@
 //             }
 //             // 校验领取上限、更新已发放优惠券+1并生成用户券
 //             Long userId = UserContext.getUser();
-//             synchronized (userId.toString().intern()){  // 加锁
+//             // synchronized (userId.toString().intern()){  // 加锁
+//             //     IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//             //     userCouponService.checkAndCreateUserCoupon(userId, coupon, serialNum.intValue());
+//             // }
+//             String key = PromotionConstants.COUPON_LOCK_KEY + userId.toString();
+//             // 创建锁对象
+//             RLock lock = redissonClient.getLock(key);
+//             boolean isLock = lock.tryLock();    // 尝试获取锁，无参数，看门狗机制生效，默认失效时间30s
+//             if (!isLock) {  // 如果获取锁失败
+//                 throw new BizIllegalException("请求太频繁，请稍后重试");
+//             } else {    // 获取锁成功，执行业务逻辑
 //                 IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
 //                 userCouponService.checkAndCreateUserCoupon(userId, coupon, serialNum.intValue());
 //             }
@@ -149,7 +164,17 @@
 //         // 校验当前用户是否已达到该优惠券的领取上限
 //         Long userId = UserContext.getUser();
 //         // 校验领取上限、更新已发放优惠券+1并生成用户券
-//         synchronized (userId.toString().intern()) { // 先加锁，在开启事务，避免所失效
+//         // synchronized (userId.toString().intern()) { // 先加锁，在开启事务，避免所失效
+//         //     IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//         //     userCouponService.checkAndCreateUserCoupon(userId, coupon, null);
+//         // }
+//         String key = PromotionConstants.COUPON_LOCK_KEY + userId.toString();
+//         // 创建锁对象
+//         RLock lock = redissonClient.getLock(key);
+//         boolean isLock = lock.tryLock();    // 尝试获取锁，无参数，看门狗机制生效，默认失效时间30s
+//         if (!isLock) {  // 如果获取锁失败
+//             throw new BizIllegalException("请求太频繁，请稍后重试");
+//         } else {    // 获取锁成功，执行业务逻辑
 //             IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
 //             userCouponService.checkAndCreateUserCoupon(userId, coupon, null);
 //         }

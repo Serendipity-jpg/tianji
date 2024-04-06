@@ -9,20 +9,21 @@
 // import com.tianji.common.exceptions.BadRequestException;
 // import com.tianji.common.exceptions.BizIllegalException;
 // import com.tianji.common.utils.UserContext;
+// import com.tianji.promotion.annotation.MyLock;
+// import com.tianji.promotion.constants.PromotionConstants;
 // import com.tianji.promotion.domain.po.Coupon;
 // import com.tianji.promotion.domain.po.ExchangeCode;
 // import com.tianji.promotion.domain.po.UserCoupon;
 // import com.tianji.promotion.domain.query.UserCouponQuery;
 // import com.tianji.promotion.domain.vo.CouponVO;
-// import com.tianji.promotion.enums.CouponStatus;
-// import com.tianji.promotion.enums.ExchangeCodeStatus;
-// import com.tianji.promotion.enums.UserCouponStatus;
+// import com.tianji.promotion.enums.*;
 // import com.tianji.promotion.mapper.CouponMapper;
 // import com.tianji.promotion.mapper.UserCouponMapper;
 // import com.tianji.promotion.service.IExchangeCodeService;
 // import com.tianji.promotion.service.IUserCouponService;
 // import com.tianji.promotion.utils.CodeUtil;
 // import lombok.RequiredArgsConstructor;
+// import org.redisson.api.RedissonClient;
 // import org.springframework.aop.framework.AopContext;
 // import org.springframework.data.redis.core.StringRedisTemplate;
 // import org.springframework.stereotype.Service;
@@ -42,11 +43,12 @@
 //  */
 // @Service
 // @RequiredArgsConstructor
-// public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
+// public class UserCouponRedissonAnnotationServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
 //
 //     private final CouponMapper couponMapper;
 //     private final StringRedisTemplate redisTemplate;
 //     private final IExchangeCodeService exchangeCodeService;
+//     private final RedissonClient redissonClient;
 //
 //     /**
 //      * 查询用户领取的优惠券列表-用户端
@@ -109,10 +111,10 @@
 //             }
 //             // 校验领取上限、更新已发放优惠券+1并生成用户券
 //             Long userId = UserContext.getUser();
-//             synchronized (userId.toString().intern()){  // 加锁
-//                 IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
-//                 userCouponService.checkAndCreateUserCoupon(userId, coupon, serialNum.intValue());
-//             }
+//             // 执行目标逻辑
+//             IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//             userCouponService.checkAndCreateUserCoupon(userId, coupon, serialNum.intValue());
+//
 //         } catch (Exception e) {
 //             // 重置redis的bitmap结构存储的兑换码状态，setbit key offset 1
 //             exchangeCodeService.hasExchanged(serialNum, false);
@@ -126,7 +128,6 @@
 //      * @param id 优惠券id
 //      */
 //     @Override
-//     // @Transactional
 //     public void receiveCoupon(Long id) {
 //         // 根据id查询优惠券信息，并进行相关校验
 //         Coupon coupon = couponMapper.selectById(id);
@@ -148,21 +149,22 @@
 //         }
 //         // 校验当前用户是否已达到该优惠券的领取上限
 //         Long userId = UserContext.getUser();
-//         // 校验领取上限、更新已发放优惠券+1并生成用户券
-//         synchronized (userId.toString().intern()) { // 先加锁，在开启事务，避免所失效
-//             IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
-//             userCouponService.checkAndCreateUserCoupon(userId, coupon, null);
-//         }
+//         // 执行目标逻辑
+//         IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//         userCouponService.checkAndCreateUserCoupon(userId, coupon, null);
 //     }
 //
 //     /**
 //      * 校验当前用户是否已达到该优惠券的领取上限
 //      * 优惠券已发放数量+1
 //      * 保存用户券
+//      * #{userId}：使用SPEL表达式，对应着形参名称userId
 //      */
 //     @Transactional
+//     @MyLock(name = PromotionConstants.COUPON_LOCK_KEY + "#{userId}",
+//             lockType = MyLockType.RE_ENTRANT_LOCK,
+//             lockStrategy = MyLockStrategy.FAIL_AFTER_RETRY_TIMEOUT)
 //     public void checkAndCreateUserCoupon(Long userId, Coupon coupon, Integer serialNum) {
-//         // synchronized (userId.toString().intern()) {  // intern会从常量池取
 //         // 查询当前用户已领取的优惠券数量
 //         Integer count = this.lambdaQuery().eq(UserCoupon::getUserId, userId)
 //                 .eq(UserCoupon::getCouponId, coupon.getId())
@@ -170,7 +172,7 @@
 //         if (count != null && count >= coupon.getUserLimit()) {
 //             throw new BadRequestException("该优惠券已达到领取上限");
 //         }
-//         // 优惠券已发放数量+
+//         // 优惠券已发放数量+1
 //         int rows = couponMapper.increaseIssueNum(coupon.getId());
 //         if (rows == 0) { // rows == 0即更新失败，需要抛出异常，触发回滚
 //             throw new BizIllegalException("优惠券库存不足");
@@ -185,7 +187,6 @@
 //                     .eq(ExchangeCode::getId, serialNum)   // 兑换码自增id
 //                     .update();
 //         }
-//         // }
 //     }
 //
 //     /**

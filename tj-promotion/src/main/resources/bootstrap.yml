@@ -44,3 +44,8 @@ tj:
       enable: true # 是否需要做登录拦截
       excludeLoginPaths:  # 放行路径
         - /coupons/list     # 优惠券列表路径
+  mq:
+    listener:
+      retry:
+        # true无状态；false有状态。如果业务中包含事务，这里改为false
+        stateless: false

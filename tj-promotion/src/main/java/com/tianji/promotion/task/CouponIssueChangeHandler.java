@@ -3,6 +3,8 @@ package com.tianji.promotion.task;
 import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.tianji.common.domain.query.PageQuery;
+import com.tianji.common.utils.DateUtils;
+import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.domain.po.Coupon;
 import com.tianji.promotion.enums.CouponStatus;
 import com.tianji.promotion.service.ICouponService;
@@ -10,10 +12,13 @@ import com.xxl.job.core.context.XxlJobHelper;
 import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author: hong.jian
@@ -25,6 +30,7 @@ import java.util.List;
 public class CouponIssueChangeHandler {
 
     private final ICouponService couponService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 优惠券定时处理任务
@@ -60,9 +66,24 @@ public class CouponIssueChangeHandler {
                 break;
             }
             // 更新优惠券状态
-            records.stream().forEach(coupon -> coupon.setStatus(CouponStatus.ISSUING));
+            records.stream().forEach(coupon -> {
+                // 更新优惠券状态为发放中
+                coupon.setStatus(CouponStatus.ISSUING);
+                // 移除Redis缓存
+                String key = PromotionConstants.COUPON_CACHE_KEY_PREFIX + coupon.getId();   // 拼接key
+                // 合并写redis
+                Map<String, String> map = new HashMap<>(5);
+                map.put("issueBeginTime", String.valueOf(DateUtils.toEpochMilli(now))); // 开始领取时间
+                map.put("issueEndTime", String.valueOf(DateUtils.toEpochMilli(coupon.getTermEndTime())));   // 领取结束时间前端必传
+                map.put("totalNum", String.valueOf(coupon.getTotalNum()));  // 优惠券总数量
+                map.put("issueNum", String.valueOf(coupon.getIssueNum()));  // 优惠券已发放数量
+                map.put("userLimit", String.valueOf(coupon.getUserLimit()));    // 用户限领数量
+                redisTemplate.opsForHash().putAll(key, map);
+            });
             // 批量更新优惠券
             couponService.updateBatchById(records);
+            // 更新redis缓存
+
             // 处理下一页数据
             if (couponPage.hasNext()) {
                 // 翻页，数量为总分片数
@@ -98,6 +119,9 @@ public class CouponIssueChangeHandler {
             // 更新优惠券状态为已完成
             for (Coupon coupon : records) {
                 coupon.setStatus(CouponStatus.FINISHED);
+                // 移除Redis缓存
+                String key = PromotionConstants.COUPON_CACHE_KEY_PREFIX + coupon.getId();   // 拼接key
+                redisTemplate.delete(key);
             }
             // 批量更新优惠券
             couponService.updateBatchById(records);
