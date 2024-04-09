@@ -1,12 +1,16 @@
 package com.tianji.promotion.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.tianji.api.dto.promotion.CouponDiscountDTO;
+import com.tianji.api.dto.promotion.OrderCouponDTO;
+import com.tianji.api.dto.promotion.OrderCourseDTO;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.promotion.domain.dto.UserCouponDTO;
-import com.tianji.promotion.domain.po.Coupon;
 import com.tianji.promotion.domain.po.UserCoupon;
 import com.tianji.promotion.domain.query.UserCouponQuery;
 import com.tianji.promotion.domain.vo.CouponVO;
+
+import java.util.List;
 
 /**
  * <p>
@@ -45,4 +49,24 @@ public interface IUserCouponService extends IService<UserCoupon> {
      */
     // void checkAndCreateUserCoupon(Long userId, Coupon coupon, Integer serialNum);
     void checkAndCreateUserCoupon(UserCouponDTO userCouponDTO);
+
+    /**
+     * 查询可用用户券方案 - 提供给trade-service远程调用
+     * @param dtoList  订单课程信息列表
+     * @return  折扣方案集合
+     */
+    List<CouponDiscountDTO> findDiscountSolution(List<OrderCourseDTO> dtoList);
+
+    /**
+     * 根据券方案计算订单优惠明细
+     */
+    CouponDiscountDTO queryDiscountDetailByOrder(OrderCouponDTO orderCouponDTO);
+
+    /**
+     * 分页查询我的优惠券接口
+     * @param userCouponIds 用户券id列表
+     */
+    List<String> queryDiscountRules(List<Long> userCouponIds);
+
+
 }

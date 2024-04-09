@@ -130,5 +130,7 @@ public class Coupon implements Serializable {
     @TableField("updater")
     private Long updater;
 
-
+    @ApiModelProperty(value = "用户券id")
+    @TableField(exist = false)
+    private Long userCouponId;
 }

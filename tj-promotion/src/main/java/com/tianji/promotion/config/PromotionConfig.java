@@ -32,4 +32,25 @@ public class PromotionConfig {
         executor.initialize();
         return executor;
     }
+
+
+    /**
+     * 计算优惠方案用到的线程池
+     */
+    @Bean
+    public Executor calSolutionExecutor(){
+        ThreadPoolTaskExecutor refundExecutor = new ThreadPoolTaskExecutor();
+        //配置核心线程数
+        refundExecutor.setCorePoolSize(20);
+        //配置最大线程数
+        refundExecutor.setMaxPoolSize(20);
+        //配置队列大小
+        refundExecutor.setQueueCapacity(2000);
+        //配置线程池中的线程的名称前缀
+        refundExecutor.setThreadNamePrefix("cal-solution-handler-");
+        // 由调用者线程执行
+        refundExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        refundExecutor.initialize();
+        return refundExecutor;
+    }
 }

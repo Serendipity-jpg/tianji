@@ -1,15 +1,20 @@
 package com.tianji.promotion.controller;
 
+import com.tianji.api.dto.promotion.CouponDiscountDTO;
+import com.tianji.api.dto.promotion.OrderCouponDTO;
+import com.tianji.api.dto.promotion.OrderCourseDTO;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.promotion.domain.query.UserCouponQuery;
 import com.tianji.promotion.domain.vo.CouponVO;
+import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 import com.tianji.promotion.service.IUserCouponService;
-import com.tianji.promotion.domain.po.UserCoupon;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.Api;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * <p>
@@ -55,5 +60,40 @@ public class UserCouponController {
     @GetMapping("/page")
     public PageDTO<CouponVO> queryUserCouponList(UserCouponQuery query){
        return userCouponService.queryUserCouponList(query);
+    }
+
+    /**
+     * 查询可用用户券方案 - 提供给trade-service远程调用
+     * @param dtoList  订单课程信息列表
+     * @return  折扣方案集合
+     */
+    @ApiOperation("查询可用用户券方案")
+    @PostMapping("/available")
+    public List<CouponDiscountDTO> findDiscountSolution(@RequestBody List<OrderCourseDTO> dtoList){
+        return userCouponService.findDiscountSolution(dtoList);
+    }
+
+    /**
+     * 根据券方案计算订单优惠明细
+     * @param orderCouponDTO
+     * @return
+     */
+    @ApiOperation("根据券方案计算订单优惠明细")
+    @PostMapping("/discount")
+    public CouponDiscountDTO queryDiscountDetailByOrder(
+            @RequestBody OrderCouponDTO orderCouponDTO){
+        return userCouponService.queryDiscountDetailByOrder(orderCouponDTO);
+    }
+
+
+
+    /**
+     *
+     */
+    @ApiOperation("分页查询我的优惠券接口")
+    @GetMapping("/rules")
+    public List<String> queryDiscountRules(
+            @ApiParam("用户优惠券id集合") @RequestParam("couponIds") List<Long> userCouponIds){
+        return userCouponService.queryDiscountRules(userCouponIds);
     }
 }
